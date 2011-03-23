@@ -1,0 +1,110 @@
+#!/usr/bin/env python
+
+import re
+import sys
+import bisect
+from optparse import OptionParser
+
+class Dictionary:
+	def __init__ (self):
+		self.words = []
+
+	def load_file (self, path):
+		with open (path) as fp:
+			for word in fp:
+				self.add_word (word)
+	
+	def add_word (self, word):
+		word = word.strip ().lower ()
+		index = bisect.bisect_left (self.words, word)
+		if index >= len (self.words) or self.words[index] != word:
+			self.words.insert (index, word)
+
+	def match_words (self, possibilities, min_length = 2, re_match = None):
+		possibilities = possibilities.lower ()
+		results = {}
+
+		for word in self.words:
+			available = [p for p in possibilities]
+			matched = True
+
+			for letter in word:
+				if letter not in available:
+					if '?' in available:
+						letter = '?'
+					else:
+						matched = False
+						break
+				available.remove (letter)
+
+			if matched and len (word) >= min_length and \
+				(re_match == None or re.match (re_match, word, re.IGNORECASE)):
+				if len (word) not in results:
+					results[len (word)] = []
+				results[len (word)].append (word)
+
+		return results
+
+
+parser = OptionParser (usage = '%prog [OPTIONS] LETTERS', version = '%prog 1.0')
+parser.add_option ('-d', '--dictionary', 
+	help = 'Load a dictionary file (one word per line); ' + \
+		'multiple dictionaries are supported',
+	action = 'append', dest = 'dictionary', default = ['twl'])
+
+parser.add_option ('-x', '--exclude-default-dictionary',
+	help = 'Do not load the default TWL dictionary',
+	action = 'store_true', dest = 'exclude_default_dictionary')
+
+parser.add_option ('-r', '--regex-match',
+	help = 'Filter matches against regular expression',
+	action = 'store', dest = 'regex_match')
+
+parser.add_option ('-l', '--min-length',
+	help = 'Minimum word length',
+	action = 'store', dest = 'min_word_length', default = 2)
+
+options, args = parser.parse_args ()
+
+try:
+	min_word_length = int (options.min_word_length)
+except:
+	parser.error ('option -l: invalid integer value \'%s\'' \
+		% options.min_word_length)
+
+if options.exclude_default_dictionary:
+	options.dictionary.remove ('twl')
+
+dict = Dictionary ()
+for file in options.dictionary:
+	dict.load_file (file)
+
+letters = ''.join (args)
+matches = dict.match_words (letters, min_word_length, options.regex_match)
+
+if len (matches) == 0:
+	restricted_to = ''
+	if options.regex_match:
+		restricted_to = ' matching /%s/' % options.regex_match
+	print 'No matches for %s%s at least %d letters long.' % \
+		(letters, restricted_to, min_word_length)
+	sys.exit (0)
+
+group_index = 0
+for word_len, words in matches.iteritems ():
+	cols = 40 / (word_len + 3)
+	col = 0
+	new_group = True
+	for word in words:
+		if new_group:
+			sys.stdout.write ('%d  ' % word_len)
+			new_group = False
+		sys.stdout.write ('%s  ' % word)
+		if col == cols:
+			sys.stdout.write ('\n   ')
+			col = 0
+		col += 1
+	sys.stdout.write ('\n')
+	if group_index < len (matches) - 1:
+		sys.stdout.write ('\n')
+		group_index += 1
