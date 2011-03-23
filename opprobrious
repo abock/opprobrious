@@ -45,16 +45,91 @@ class Dictionary:
 
 		return results
 
+class GameScorer:
+	point_map = {
+		'words_with_friends': {
+			'etarsoi': 1,
+			'nldu': 2,
+			'gyh': 3,
+			'bfpwmc': 4,
+			'vk': 5,
+			'x': 8,
+			'jzq': 10
+		},
+
+		'scrabble': {
+			'eaionrtlsu': 1,
+			'dg': 2,
+			'bcmp': 3,
+			'fhvwy': 4,
+			'k': 5,
+			'jx': 8,
+			'qz': 10
+		}
+	}
+
+	@classmethod
+	def get_games (cls):
+		return cls.point_map.keys ()
+
+	@classmethod
+	def score_word (cls, game_name, word):
+		points = cls.point_map[game_name]
+		score = 0
+
+		for c in word:
+			for letters, value in points.iteritems ():
+				if c in letters:
+					score += value
+	
+		return score
+
+def match_to_regex (match):
+	import string
+	
+	re = ''
+	include_letters = ''
+	
+	for i, c in enumerate (match):
+		if i == 0 and c in '|[^':
+			re += '^'
+			continue
+
+		if i == 0:
+			re += '.*'
+
+		if i == len (match) - 1 and c in '|]$':
+			re += '$'
+		elif c in '_?*':
+			re += '[a-z]'
+		elif c in string.ascii_letters:
+			re += c
+			include_letters += c
+	
+	return re, include_letters
 
 parser = OptionParser (usage = '%prog [OPTIONS] LETTERS', version = '%prog 1.0')
+
+parser.add_option ('-g', '--game-name',
+	help = 'Which game to use for scoring (%s)' % ','.join (GameScorer.get_games ()),
+	action = 'store', dest = 'game_name', default = GameScorer.get_games ()[0])
+
 parser.add_option ('-d', '--dictionary', 
 	help = 'Load a dictionary file (one word per line); ' + \
 		'multiple dictionaries are supported',
-	action = 'append', dest = 'dictionary', default = ['twl'])
+	action = 'append', dest = 'dictionary', default = ['enable'])
 
 parser.add_option ('-x', '--exclude-default-dictionary',
 	help = 'Do not load the default TWL dictionary',
 	action = 'store_true', dest = 'exclude_default_dictionary')
+
+parser.add_option ('-m', '--match',
+	help = 'Filter matches against a pattern. For example: [B__K] would match ' + \
+		'BOOK and BARK but neither BOOKS nor ABORK; but B__K would match all of ' + \
+		'BOOK, BARK, BOOKS, ABORK, ABORKS. [B__K would match all of BOOK, BARK, and BOOKS, ' + \
+		'but not ABORKS. And finally, B__K] would match BOOK, BARK, and ABORK, but ' + \
+		'neither BOOKS nor ABORKS. I know, ABORK is not a word.',
+	action = 'store', dest = 'match')
 
 parser.add_option ('-r', '--regex-match',
 	help = 'Filter matches against regular expression',
@@ -73,35 +148,47 @@ except:
 		% options.min_word_length)
 
 if options.exclude_default_dictionary:
-	options.dictionary.remove ('twl')
+	options.dictionary.remove ('enable')
+
+if options.game_name not in GameScorer.get_games ():
+	parser.error ('option -g: invalid game name \'%s\'' % options.game_name)
 
 dict = Dictionary ()
 for file in options.dictionary:
 	dict.load_file (file)
 
 letters = ''.join (args)
-matches = dict.match_words (letters, min_word_length, options.regex_match)
+
+match = options.regex_match
+match_display = match
+if not match and options.match:
+	match, include_letters = match_to_regex (options.match)
+	match_display = options.match
+	letters += include_letters
+
+matches = dict.match_words (letters, min_word_length, match)
 
 if len (matches) == 0:
 	restricted_to = ''
-	if options.regex_match:
-		restricted_to = ' matching /%s/' % options.regex_match
-	print 'No matches for %s%s at least %d letters long.' % \
+	if match:
+		restricted_to = ' matching \'%s\'' % match_display
+	print 'No matches for \'%s\'%s at least %d letters long.' % \
 		(letters, restricted_to, min_word_length)
 	sys.exit (0)
 
 group_index = 0
 for word_len, words in matches.iteritems ():
-	cols = 40 / (word_len + 3)
+	cols = 40 / (word_len + 6)
 	col = 0
 	new_group = True
 	for word in words:
 		if new_group:
-			sys.stdout.write ('%d  ' % word_len)
+			sys.stdout.write (('%d' % word_len).ljust (4, ' '))
 			new_group = False
-		sys.stdout.write ('%s  ' % word)
+		sys.stdout.write ('%s %s' % (word, ('(%d)' % \
+			GameScorer.score_word (options.game_name, word)).ljust (5, ' ')))
 		if col == cols:
-			sys.stdout.write ('\n   ')
+			sys.stdout.write ('\n    ')
 			col = 0
 		col += 1
 	sys.stdout.write ('\n')
