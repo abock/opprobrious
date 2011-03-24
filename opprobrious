@@ -113,8 +113,13 @@ def match_to_regex (match):
 	
 	re = ''
 	include_letters = ''
-	
+	exclude_letter = False
+
 	for i, c in enumerate (match):
+		if c in '-!':
+			exclude_letter = True
+			continue
+
 		if i == 0 and c in '|[^':
 			re += '^'
 			continue
@@ -128,8 +133,11 @@ def match_to_regex (match):
 			re += '[a-z]'
 		elif c in string.ascii_letters:
 			re += c
-			include_letters += c
-	
+			if not exclude_letter:
+				include_letters += c
+		
+		exclude_letter = False
+
 	return re, include_letters
 
 parser = OptionParser (usage = '%prog [OPTIONS] LETTERS', version = '%prog 1.0')
