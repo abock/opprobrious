@@ -93,6 +93,10 @@ class GameScorer:
 	}
 
 	@classmethod
+	def default_game (cls):
+		return 'words_with_friends'
+
+	@classmethod
 	def get_games (cls):
 		return cls.point_map.keys ()
 
@@ -144,7 +148,7 @@ parser = OptionParser (usage = '%prog [OPTIONS] LETTERS', version = '%prog 1.0')
 
 parser.add_option ('-g', '--game-name',
 	help = 'Which game to use for scoring (%s)' % ','.join (GameScorer.get_games ()),
-	action = 'store', dest = 'game_name', default = GameScorer.get_games ()[0])
+	action = 'store', dest = 'game_name', default = GameScorer.default_game ())
 
 parser.add_option ('-d', '--dictionary', 
 	help = 'Load a dictionary file (one word per line); ' + \
